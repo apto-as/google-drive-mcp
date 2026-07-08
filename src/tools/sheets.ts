@@ -703,13 +703,23 @@ export async function handleTool(
       });
 
       const values = response.data.values || [];
+      // Report ABSOLUTE sheet row numbers, not positions within the returned range.
+      // values.get returns rows starting at the range's first row, so "Row N" must be
+      // offset by that start row. Derive it from the fully-qualified range Google echoes
+      // back (response.data.range), falling back to the requested range; default to 1 for
+      // open-ended / whole-column ranges.
+      const effectiveRange = String(response.data.range || a.range);
+      const firstCell = effectiveRange.split(':')[0];
+      const cellOnly = firstCell.includes('!') ? firstCell.slice(firstCell.lastIndexOf('!') + 1) : firstCell;
+      const startRowMatch = /^\$?[A-Za-z]{1,3}\$?(\d+)$/.exec(cellOnly);
+      const startRow = startRowMatch ? parseInt(startRowMatch[1], 10) : 1;
       let content = `Content for range ${a.range}:\n\n`;
 
       if (values.length === 0) {
         content += "(empty range)";
       } else {
         values.forEach((row, rowIndex) => {
-          content += `Row ${rowIndex + 1}: ${row.join(', ')}\n`;
+          content += `Row ${startRow + rowIndex}: ${row.join(', ')}\n`;
         });
       }
 
