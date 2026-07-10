@@ -1,5 +1,73 @@
 # Google Drive MCP Server
 
+> **This is a fork.** It exists to distribute one bug fix ahead of upstream.
+> Upstream: [piotr-agier/google-drive-mcp](https://github.com/piotr-agier/google-drive-mcp) · Licence: MIT (unchanged) · All credit for the project belongs to the original author.
+
+## About this fork
+
+### The bug
+
+`getGoogleSheetContent` numbered its output rows relative to the **requested range** instead of using
+the sheet's **absolute row numbers**. Reading a sub-range reported the wrong row number:
+
+```
+getGoogleSheetContent(range: "Sheet1!A3:C6")
+
+  upstream  ->  Row 1, Row 2, Row 3, Row 4     # these are really sheet rows 3-6
+  this fork ->  Row 3, Row 4, Row 5, Row 6     # correct
+```
+
+This is easy to miss, because reading from `A1:` makes the relative and absolute numbering coincide.
+It becomes harmful the moment you read a window (to skip a header, say) and then edit based on what you
+saw: `updateGoogleSheet` addresses rows by absolute A1 notation, so an edit derived from a relative
+label silently lands on the wrong row.
+
+The write path (`updateGoogleSheet`, `appendSpreadsheetRows`) was already correct. This fork changes
+only the read-side labelling: the absolute start row is derived from the fully-qualified range the
+Sheets API echoes back, and rows are labelled `startRow + rowIndex`. Open-ended ranges (`A:C`) default
+to row 1.
+
+Fix commit: [`3b9ae56`](https://github.com/apto-as/google-drive-mcp/commit/3b9ae56) · branch `fix/absolute-sheet-row-numbers`
+
+### Install
+
+Point your MCP client at the pinned tag:
+
+```json
+{
+  "mcpServers": {
+    "gdrive": {
+      "command": "npx",
+      "args": ["-y", "github:apto-as/google-drive-mcp#v2.2.0-rownum-fix"],
+      "env": {
+        "GOOGLE_DRIVE_OAUTH_CREDENTIALS": "/absolute/path/to/gcp-oauth.keys.json"
+      }
+    }
+  }
+}
+```
+
+Two things worth knowing:
+
+- **`-y` is required.** Without it, npx asks for install confirmation on first run and the MCP launch hangs with no visible error.
+- **The first launch takes ~15 seconds** while npm builds the TypeScript source (`prepare`). Later launches are served from the npx cache and start immediately.
+
+Pinning to `#v2.2.0-rownum-fix` keeps installs reproducible; omitting the ref would track this fork's
+default branch. Authentication, configuration, and every tool behave exactly as upstream — the fix is
+the only change.
+
+### Verifying it works
+
+Read a sub-range that does not start at row 1 and check the labels:
+
+```
+getGoogleSheetContent(range: "Sheet1!A3:C6")   ->   should report Row 3 … Row 6
+```
+
+Everything below is the upstream README, unchanged.
+
+---
+
 A Model Context Protocol (MCP) server that provides secure integration with Google Drive, Docs, Sheets, Slides, and Calendar. It allows Claude Desktop and other MCP clients to manage files in Google Drive and calendar events through a standardized interface.
 
 ## Features
